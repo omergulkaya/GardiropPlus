@@ -80,13 +80,27 @@ $db_username = 'root';
 $db_password = '';
 $db_database = 'closet_db';
 
-// .env dosyasını oku
-$env_file = FCPATH . '.env';
-if (file_exists($env_file)) {
+// .env dosyasını oku - birden fazla olası konumu kontrol et
+$env_files = array(
+    FCPATH . '.env',           // Proje root
+    APPPATH . '../.env',       // Bir üst dizin
+    __DIR__ . '/../../.env',   // Relative path
+);
+
+$env_file = null;
+foreach ($env_files as $file) {
+    if (file_exists($file) && is_readable($file)) {
+        $env_file = $file;
+        break;
+    }
+}
+
+if ($env_file) {
     $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
     foreach ($lines as $line) {
         // Yorum satırlarını atla
-        if (strpos(trim($line), '#') === 0) {
+        $line = trim($line);
+        if (empty($line) || strpos($line, '#') === 0) {
             continue;
         }
         

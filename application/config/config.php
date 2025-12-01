@@ -388,7 +388,20 @@ $config['sess_driver'] = 'files';
 $config['sess_cookie_name'] = 'ci_session';
 $config['sess_samesite'] = 'Lax';
 $config['sess_expiration'] = 7200;
-$config['sess_save_path'] = null;
+// Session path - open_basedir kısıtlaması için /tmp/ kullan veya proje içinde bir dizin
+// Production sunucuda /tmp/ genellikle izin verilen dizinler içindedir
+$session_path = sys_get_temp_dir() . '/ci_sessions';
+// Session dizinini oluştur (yoksa)
+if (!is_dir($session_path)) {
+    @mkdir($session_path, 0700, true);
+}
+$config['sess_save_path'] = $session_path;
+// Alternatif: Proje içinde session dizini kullan
+// $session_path = APPPATH . 'cache/sessions';
+// if (!is_dir($session_path)) {
+//     @mkdir($session_path, 0700, true);
+// }
+// $config['sess_save_path'] = $session_path;
 $config['sess_match_ip'] = false;
 $config['sess_time_to_update'] = 300;
 $config['sess_regenerate_destroy'] = false;

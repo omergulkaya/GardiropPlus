@@ -25,6 +25,18 @@
                             </div>
                         <?php endif; ?>
 
+                        <?php if (isset($success)): ?>
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle"></i> <?php echo htmlspecialchars($success); ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if (isset($method) && $method === 'email'): ?>
+                            <div class="alert alert-info">
+                                <i class="bi bi-envelope"></i> Doğrulama kodu <strong><?php echo htmlspecialchars($email ?? ''); ?></strong> adresine gönderildi.
+                            </div>
+                        <?php endif; ?>
+
                         <form method="post" action="<?php echo base_url('admin/verify_2fa'); ?>">
                             <div class="mb-3">
                                 <label for="code" class="form-label">Doğrulama Kodu</label>
@@ -32,19 +44,31 @@
                                        class="form-control form-control-lg text-center" 
                                        id="code" 
                                        name="code" 
-                                       placeholder="000000" 
+                                       placeholder="<?php echo (isset($method) && $method === 'email') ? 'E-posta kodunuz' : '000000'; ?>" 
                                        maxlength="6" 
                                        pattern="[0-9]{6}" 
                                        required 
                                        autofocus>
                                 <small class="form-text text-muted">
-                                    Google Authenticator uygulamanızdan 6 haneli kodu girin
+                                    <?php if (isset($method) && $method === 'email'): ?>
+                                        E-posta adresinize gönderilen 6 haneli kodu girin. Kod 10 dakika geçerlidir.
+                                    <?php else: ?>
+                                        Google Authenticator uygulamanızdan 6 haneli kodu girin
+                                    <?php endif; ?>
                                 </small>
                             </div>
 
-                            <button type="submit" class="btn btn-primary btn-lg w-100">
+                            <button type="submit" class="btn btn-primary btn-lg w-100 mb-2">
                                 <i class="bi bi-check-circle"></i> Doğrula
                             </button>
+
+                            <?php if (isset($method) && $method === 'email'): ?>
+                                <form method="post" action="<?php echo base_url('admin/verify_2fa'); ?>" style="display: inline;">
+                                    <button type="submit" name="resend_code" value="1" class="btn btn-outline-secondary btn-lg w-100">
+                                        <i class="bi bi-arrow-clockwise"></i> Kodu Yeniden Gönder
+                                    </button>
+                                </form>
+                            <?php endif; ?>
                         </form>
 
                         <div class="text-center mt-4">

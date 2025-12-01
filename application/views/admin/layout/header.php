@@ -121,6 +121,11 @@
                 </a>
             </li>
             <li>
+                <a href="<?php echo base_url('admin/reports'); ?>" class="<?php echo (strpos(uri_string(), 'admin/reports') !== false) ? 'active' : ''; ?>">
+                    <i class="bi bi-file-earmark-bar-graph"></i> Raporlar
+                </a>
+            </li>
+            <li>
                 <a href="<?php echo base_url('admin/errors'); ?>" class="<?php echo (strpos(uri_string(), 'admin/error') !== false) ? 'active' : ''; ?>">
                     <i class="bi bi-bug"></i> API Hataları
                 </a>

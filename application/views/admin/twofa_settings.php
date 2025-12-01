@@ -79,13 +79,54 @@ $show_setup = isset($show_setup) ? $show_setup : false;
                     </form>
                 </div>
             </div>
+        <?php elseif (isset($pending_email_verification) && $pending_email_verification): ?>
+            <!-- Email 2FA Setup -->
+            <div class="card mb-3">
+                <div class="card-body">
+                    <h6>E-posta Doğrulama Kodu</h6>
+                    <p>Doğrulama kodu <strong><?php echo htmlspecialchars($admin['email'] ?? ''); ?></strong> adresine gönderildi.</p>
+                    <p>E-posta kutunuzu kontrol edin ve 6 haneli kodu girin.</p>
+                    
+                    <form method="post" action="<?php echo base_url('admin/twofa_settings'); ?>">
+                        <input type="hidden" name="action" value="verify_email">
+                        <div class="mb-3">
+                            <input type="text" 
+                                   class="form-control text-center" 
+                                   name="code" 
+                                   placeholder="000000" 
+                                   maxlength="6" 
+                                   pattern="[0-9]{6}" 
+                                   required>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Doğrula ve Etkinleştir
+                        </button>
+                    </form>
+                    
+                    <form method="post" action="<?php echo base_url('admin/twofa_settings'); ?>" class="mt-2">
+                        <input type="hidden" name="action" value="enable_email">
+                        <button type="submit" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-clockwise"></i> Kodu Yeniden Gönder
+                        </button>
+                    </form>
+                </div>
+            </div>
         <?php else: ?>
-            <form method="post" action="<?php echo base_url('admin/twofa_settings'); ?>">
-                <input type="hidden" name="action" value="enable_totp">
-                <button type="submit" class="btn btn-primary">
-                    <i class="bi bi-shield-lock"></i> TOTP (Google Authenticator) Etkinleştir
-                </button>
-            </form>
+            <div class="d-grid gap-2">
+                <form method="post" action="<?php echo base_url('admin/twofa_settings'); ?>">
+                    <input type="hidden" name="action" value="enable_totp">
+                    <button type="submit" class="btn btn-primary w-100 mb-2">
+                        <i class="bi bi-shield-lock"></i> TOTP (Google Authenticator) Etkinleştir
+                    </button>
+                </form>
+                
+                <form method="post" action="<?php echo base_url('admin/twofa_settings'); ?>">
+                    <input type="hidden" name="action" value="enable_email">
+                    <button type="submit" class="btn btn-outline-primary w-100">
+                        <i class="bi bi-envelope"></i> E-posta ile 2FA Etkinleştir
+                    </button>
+                </form>
+            </div>
         <?php endif; ?>
     <?php endif; ?>
 </div>

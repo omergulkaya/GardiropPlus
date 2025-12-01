@@ -27,6 +27,8 @@ class Admin extends CI_Controller
         $this->load->model('User_2fa_model');
         $this->load->model('User_privacy_model');
         $this->load->model('Data_retention_model');
+        $this->load->model('Anonymous_analytics_model');
+        $this->load->library('advanced_filter_library');
         
         // Admin authentication kontrolü
         $this->check_admin_auth();
@@ -125,11 +127,20 @@ class Admin extends CI_Controller
 
         // 2FA kontrolü
         if ($this->User_2fa_model->is_enabled($user['id'])) {
+            $twofa = $this->User_2fa_model->get_or_create($user['id']);
+            
+            // Email ile 2FA ise kod gönder
+            if ($twofa['method'] === 'email') {
+                $code = $this->User_2fa_model->create_email_code($user['id']);
+                $this->send_2fa_email($user['email'], $code);
+            }
+            
             // 2FA kodu girilmesi gerekiyor
             $this->session->set_userdata([
                 'admin_pending_2fa' => true,
                 'admin_pending_user_id' => $user['id'],
-                'admin_pending_email' => $user['email']
+                'admin_pending_email' => $user['email'],
+                'admin_pending_2fa_method' => $twofa['method']
             ]);
             redirect('admin/verify_2fa');
         }
@@ -318,9 +329,108 @@ class Admin extends CI_Controller
         // Analytics verileri
         $data['analytics'] = $this->Analytics_model->get_all_statistics();
         
+        // Anonimleştirilmiş istatistikler
+        $date_from = $this->input->get('date_from') ?: date('Y-m-d', strtotime('-30 days'));
+        $date_to = $this->input->get('date_to') ?: date('Y-m-d');
+        $data['anonymous_stats'] = $this->Anonymous_analytics_model->get_anonymous_statistics($date_from, $date_to);
+        
         $this->load->view('admin/layout/header', $data);
         $this->load->view('admin/statistics', $data);
         $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * Anonimleştirilmiş Raporlar
+     */
+    public function reports()
+    {
+        $data['title'] = 'Raporlar - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+        
+        $report_type = $this->input->get('type') ?: 'general';
+        $date_from = $this->input->get('date_from') ?: date('Y-m-d', strtotime('-30 days'));
+        $date_to = $this->input->get('date_to') ?: date('Y-m-d');
+        $format = $this->input->get('format') ?: 'json';
+        
+        // Trend analizi
+        $metric = $this->input->get('metric') ?: 'users';
+        $period = $this->input->get('period') ?: 'daily';
+        $data['trends'] = $this->Anonymous_analytics_model->get_trend_analysis($metric, $period, 30);
+        
+        // Toplu rapor
+        $data['report'] = $this->Anonymous_analytics_model->get_aggregate_report($report_type, $date_from, $date_to);
+        $data['report_type'] = $report_type;
+        $data['date_from'] = $date_from;
+        $data['date_to'] = $date_to;
+        
+        // Export isteği
+        if ($this->input->get('export')) {
+            $export_data = $this->Anonymous_analytics_model->export_anonymous_data($format, $report_type);
+            
+            if ($format === 'json') {
+                $this->output->set_content_type('application/json');
+                $this->output->set_output($export_data);
+            } elseif ($format === 'csv') {
+                $filename = 'anonymous_report_' . date('Y-m-d') . '.csv';
+                $this->output->set_content_type('text/csv');
+                $this->output->set_header('Content-Disposition: attachment; filename="' . $filename . '"');
+                $this->output->set_output($export_data);
+            }
+            return;
+        }
+        
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/reports/index', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * Sütun görünürlük tercihlerini kaydet (AJAX)
+     */
+    public function save_column_preferences()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+        
+        $table_name = $this->input->post('table_name');
+        $visible_columns = $this->input->post('visible_columns');
+        
+        if (!$table_name || !$visible_columns) {
+            $this->output->set_status_header(400);
+            $this->output->set_output(json_encode(['success' => false, 'message' => 'Eksik parametreler']));
+            return;
+        }
+        
+        $result = $this->advanced_filter_library->save_column_preferences(
+            $this->admin_id,
+            $table_name,
+            $visible_columns
+        );
+        
+        if ($result) {
+            $this->output->set_output(json_encode(['success' => true, 'message' => 'Tercihler kaydedildi']));
+        } else {
+            $this->output->set_status_header(500);
+            $this->output->set_output(json_encode(['success' => false, 'message' => 'Kayıt başarısız']));
+        }
+    }
+
+    /**
+     * Görünüm modunu değiştir
+     */
+    public function set_view_mode()
+    {
+        $view_mode = $this->input->post('view_mode');
+        $table_name = $this->input->post('table_name');
+        
+        if ($view_mode && $table_name) {
+            $this->session->set_userdata('view_mode_' . $table_name, $view_mode);
+            $this->output->set_output(json_encode(['success' => true]));
+        } else {
+            $this->output->set_status_header(400);
+            $this->output->set_output(json_encode(['success' => false]));
+        }
     }
 
     /**
@@ -510,6 +620,14 @@ class Admin extends CI_Controller
         $data['title'] = '2FA Doğrulama - GardıropPlus Admin';
         $data['user_id'] = $this->session->userdata('admin_pending_user_id');
         $data['email'] = $this->session->userdata('admin_pending_email');
+        $data['method'] = $this->session->userdata('admin_pending_2fa_method') ?: 'totp';
+
+        // Kod yeniden gönder isteği
+        if ($this->input->post('resend_code') && $data['method'] === 'email') {
+            $code = $this->User_2fa_model->create_email_code($data['user_id']);
+            $this->send_2fa_email($data['email'], $code);
+            $data['success'] = 'Doğrulama kodu e-posta adresinize gönderildi.';
+        }
 
         if ($this->input->post('code')) {
             $code = $this->input->post('code');
@@ -532,8 +650,8 @@ class Admin extends CI_Controller
             }
             
             if ($verified) {
-                // 2FA doğrulandı, session oluştur
-                $this->session->unset_userdata(['admin_pending_2fa', 'admin_pending_user_id', 'admin_pending_email']);
+                // 2FA doğrulandı, session temizle
+                $this->session->unset_userdata(['admin_pending_2fa', 'admin_pending_user_id', 'admin_pending_email', 'admin_pending_2fa_method']);
                 $this->session->set_userdata([
                     'admin_logged_in' => true,
                     'admin_id' => $user['id'],
@@ -597,12 +715,25 @@ class Admin extends CI_Controller
                 $this->User_2fa_model->disable($user_id);
                 $this->session->set_flashdata('success', '2FA devre dışı bırakıldı.');
                 redirect('admin/twofa_settings');
-            } elseif ($action === 'send_email_code') {
+            } elseif ($action === 'enable_email') {
+                // Email ile 2FA etkinleştir
                 $code = $this->User_2fa_model->create_email_code($user_id);
-                // Email gönder (PHPMailer kullanılabilir)
-                $this->load->library('phpmailer_lib');
-                // Email gönderme kodu buraya eklenecek
-                $data['email_code_sent'] = true;
+                if ($this->send_2fa_email($this->admin_data['email'], $code)) {
+                    $data['email_code_sent'] = true;
+                    $data['pending_email_verification'] = true;
+                } else {
+                    $data['error'] = 'E-posta gönderilemedi. Lütfen e-posta ayarlarını kontrol edin.';
+                }
+            } elseif ($action === 'verify_email') {
+                $code = $this->input->post('code');
+                if ($this->User_2fa_model->verify_email_code($user_id, $code)) {
+                    $this->User_2fa_model->enable($user_id, 'email');
+                    $this->session->set_flashdata('success', '2FA (E-posta) başarıyla etkinleştirildi.');
+                    redirect('admin/twofa_settings');
+                } else {
+                    $data['error'] = 'Geçersiz doğrulama kodu.';
+                    $data['pending_email_verification'] = true;
+                }
             }
         }
 
@@ -689,6 +820,58 @@ class Admin extends CI_Controller
         $this->load->view('admin/layout/header', $data);
         $this->load->view('admin/privacy_settings', $data);
         $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * 2FA email gönder
+     */
+    private function send_2fa_email($email, $code)
+    {
+        $this->load->library('email');
+        
+        $config = [
+            'protocol' => 'smtp',
+            'smtp_host' => $this->config->item('smtp_host') ?: 'localhost',
+            'smtp_port' => $this->config->item('smtp_port') ?: 587,
+            'smtp_user' => $this->config->item('smtp_user') ?: '',
+            'smtp_pass' => $this->config->item('smtp_pass') ?: '',
+            'smtp_crypto' => $this->config->item('smtp_crypto') ?: 'tls',
+            'mailtype' => 'html',
+            'charset' => 'utf-8',
+            'wordwrap' => true
+        ];
+        
+        $this->email->initialize($config);
+        
+        $this->email->from($this->config->item('smtp_user') ?: 'noreply@gardiropplus.com', 'GardıropPlus Admin');
+        $this->email->to($email);
+        $this->email->subject('2FA Doğrulama Kodu - GardıropPlus Admin');
+        
+        $message = '
+        <html>
+        <head>
+            <style>
+                body { font-family: Arial, sans-serif; }
+                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                .code-box { background: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 5px; }
+                .warning { color: #d9534f; font-size: 14px; margin-top: 20px; }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h2>2FA Doğrulama Kodu</h2>
+                <p>Admin paneline giriş için doğrulama kodunuz:</p>
+                <div class="code-box">' . $code . '</div>
+                <p>Bu kod 10 dakika geçerlidir.</p>
+                <p class="warning">Bu kodu kimseyle paylaşmayın. Eğer bu işlemi siz yapmadıysanız, lütfen hemen sistem yöneticisi ile iletişime geçin.</p>
+                <p>İyi günler,<br>GardıropPlus Admin Ekibi</p>
+            </div>
+        </body>
+        </html>';
+        
+        $this->email->message($message);
+        
+        return $this->email->send();
     }
 }
 

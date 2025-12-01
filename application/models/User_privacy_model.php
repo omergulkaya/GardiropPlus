@@ -133,14 +133,9 @@ class User_privacy_model extends CI_Model
      */
     public function get_deletion_requests($status = 'pending')
     {
-        $this->db->where('data_deletion_requested', 1);
-        if ($status) {
-            $this->load->model('Gdpr_model');
-            return $this->Gdpr_model->get_deletion_requests($status);
-        }
-        
-        $this->db->order_by('data_deletion_requested_at', 'DESC');
-        return $this->db->get($this->table)->result_array();
+        // GDPR model üzerinden silme taleplerini getir
+        $this->load->model('Gdpr_model');
+        return $this->Gdpr_model->get_deletion_requests($status);
     }
 }
 

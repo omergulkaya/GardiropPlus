@@ -416,7 +416,26 @@ class Admin extends CI_Controller
         $per_page = 50;
         $offset = ($page - 1) * $per_page;
 
-        $data['logs'] = $this->Admin_activity_log_model->get_filtered($filters, $per_page, $offset);
+        $logs = $this->Admin_activity_log_model->get_filtered($filters, $per_page, $offset);
+        
+        // Admin bilgilerini loglara ekle
+        $admin_ids = array_unique(array_column($logs, 'admin_id'));
+        $admins = [];
+        if (!empty($admin_ids)) {
+            foreach ($admin_ids as $admin_id) {
+                $admin = $this->User_model->get_by_id($admin_id);
+                if ($admin) {
+                    $admins[$admin_id] = $admin;
+                }
+            }
+        }
+        
+        // Her log için admin bilgisini ekle
+        foreach ($logs as &$log) {
+            $log['admin_info'] = isset($admins[$log['admin_id']]) ? $admins[$log['admin_id']] : null;
+        }
+        
+        $data['logs'] = $logs;
         $data['total_logs'] = $this->Admin_activity_log_model->count_filtered($filters);
         $data['current_page'] = $page;
         $data['per_page'] = $per_page;

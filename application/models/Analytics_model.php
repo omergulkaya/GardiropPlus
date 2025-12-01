@@ -252,8 +252,17 @@ class Analytics_model extends CI_Model
         $total_outfits = $this->db->count_all($this->outfits_table);
         
         // Aktif kullanıcılar (son 30 gün)
-        $this->db->where('last_login >=', date('Y-m-d H:i:s', strtotime('-30 days')));
-        $active_users = $this->db->count_all_results('users');
+        // last_login kolonu varsa onu kullan, yoksa email_verified kullan
+        $columns = $this->db->list_fields('users');
+        if (in_array('last_login', $columns)) {
+            // last_login kolonu varsa son 30 gün içinde giriş yapanları say
+            $this->db->where('last_login >=', date('Y-m-d H:i:s', strtotime('-30 days')));
+            $active_users = $this->db->count_all_results('users');
+        } else {
+            // last_login yoksa email_verified olan kullanıcıları aktif say
+            $this->db->where('email_verified', 1);
+            $active_users = $this->db->count_all_results('users');
+        }
         
         // Kategori dağılımı
         $this->db->select('category, COUNT(*) as count');

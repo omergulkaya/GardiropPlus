@@ -61,7 +61,7 @@ $show_setup = isset($show_setup) ? $show_setup : false;
                     <h6>1. QR Kodu Tarayın</h6>
                     <p>Google Authenticator veya benzeri bir uygulama ile QR kodu tarayın:</p>
                     <div class="text-center mb-3">
-                        <img src="<?php echo htmlspecialchars($qr_url); ?>" alt="QR Code" class="img-fluid" style="max-width: 200px;">
+                        <img data-src="<?php echo htmlspecialchars($qr_url); ?>" alt="QR Code" class="img-fluid lazy-load" style="max-width: 200px;" loading="lazy">
                     </div>
                     
                     <h6>2. Secret Key (Manuel Giriş İçin)</h6>

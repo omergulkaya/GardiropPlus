@@ -332,5 +332,15 @@ class Api_error_model extends CI_Model
         $this->db->where('created_at >=', date('Y-m-d H:i:s', strtotime('-24 hours')));
         return $this->db->count_all_results($this->table);
     }
+
+    /**
+     * Kritik hata sayısı
+     */
+    public function count_critical()
+    {
+        $this->db->where('severity', 'critical');
+        $this->db->where_in('status', ['new', 'investigating']);
+        return $this->db->count_all_results($this->table);
+    }
 }
 

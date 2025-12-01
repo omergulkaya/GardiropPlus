@@ -664,6 +664,19 @@ class Clothing_item_model extends CI_Model
     /**
      * Son kıyafetleri getir (admin için)
      */
+    /**
+     * Arama yap
+     */
+    public function search($query, $limit = 10)
+    {
+        $this->db->like('name', $query);
+        $this->db->or_like('category', $query);
+        $this->db->or_like('description', $query);
+        $this->db->limit($limit);
+        $this->db->order_by('date_added', 'DESC');
+        return $this->db->get($this->table)->result_array();
+    }
+
     public function get_recent($limit = 10)
     {
         $this->db->order_by('date_added', 'DESC');

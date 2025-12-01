@@ -30,6 +30,29 @@ class User_model extends CI_Model
     }
 
     /**
+     * Birden fazla ID'ye göre kullanıcıları getir (N+1 query problemini çözmek için)
+     * @param array $ids Kullanıcı ID'leri
+     * @return array ID'ye göre indexlenmiş kullanıcı array'i
+     */
+    public function get_by_ids($ids)
+    {
+        if (empty($ids)) {
+            return [];
+        }
+        
+        $this->db->where_in('id', $ids);
+        $result = $this->db->get($this->table)->result_array();
+        
+        // Array key olarak id kullan (hızlı erişim için)
+        $indexed = [];
+        foreach ($result as $row) {
+            $indexed[$row['id']] = $row;
+        }
+        
+        return $indexed;
+    }
+
+    /**
      * Email'e göre kullanıcı getir
      */
     public function get_by_email($email)
@@ -200,6 +223,21 @@ class User_model extends CI_Model
     /**
      * Son kullanıcıları getir
      */
+    /**
+     * Arama yap
+     */
+    public function search($query, $limit = 10)
+    {
+        $this->db->group_start();
+        $this->db->like('first_name', $query);
+        $this->db->or_like('last_name', $query);
+        $this->db->or_like('email', $query);
+        $this->db->group_end();
+        $this->db->limit($limit);
+        $this->db->order_by('created_at', 'DESC');
+        return $this->db->get($this->table)->result_array();
+    }
+
     public function get_recent($limit = 10)
     {
         $this->db->order_by('created_at', 'DESC');

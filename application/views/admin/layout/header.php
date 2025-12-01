@@ -7,92 +7,35 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #667eea;
-            --secondary-color: #764ba2;
-            --sidebar-width: 250px;
+    <?php
+    // CSS/JS Optimizasyonu: Production'da birleştirilmiş ve minify edilmiş versiyonları kullan
+    if (ENVIRONMENT === 'production') {
+        // Production: Birleştirilmiş ve minify edilmiş dosya
+        $combined_css = base_url('application/views/admin/assets/admin-combined.min.css');
+        if (file_exists(FCPATH . 'application/views/admin/assets/admin-combined.min.css')) {
+            echo '<link href="' . $combined_css . '" rel="stylesheet">';
+        } else {
+            // Fallback: Ayrı dosyalar (minify edilmiş)
+            $css_suffix = '.min.css';
+            echo '<link href="' . base_url('application/views/admin/assets/design-tokens' . $css_suffix) . '" rel="stylesheet">';
+            echo '<link href="' . base_url('application/views/admin/assets/admin-theme' . $css_suffix) . '" rel="stylesheet">';
+            echo '<link href="' . base_url('application/views/admin/assets/modern-admin' . $css_suffix) . '" rel="stylesheet">';
         }
-        body {
-            background-color: #f8f9fa;
-        }
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            height: 100vh;
-            width: var(--sidebar-width);
-            background: linear-gradient(180deg, var(--primary-color) 0%, var(--secondary-color) 100%);
-            color: white;
-            padding: 1.5rem 0;
-            overflow-y: auto;
-            z-index: 1000;
-        }
-        .sidebar-brand {
-            padding: 1rem 1.5rem;
-            font-size: 1.5rem;
-            font-weight: 700;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
-            margin-bottom: 1rem;
-        }
-        .sidebar-menu {
-            list-style: none;
-            padding: 0;
-            margin: 0;
-        }
-        .sidebar-menu li {
-            margin: 0.25rem 0;
-        }
-        .sidebar-menu a {
-            display: flex;
-            align-items: center;
-            padding: 0.75rem 1.5rem;
-            color: rgba(255,255,255,0.8);
-            text-decoration: none;
-            transition: all 0.3s;
-        }
-        .sidebar-menu a:hover,
-        .sidebar-menu a.active {
-            background-color: rgba(255,255,255,0.1);
-            color: white;
-        }
-        .sidebar-menu a i {
-            width: 20px;
-            margin-right: 0.75rem;
-        }
-        .main-content {
-            margin-left: var(--sidebar-width);
-            padding: 2rem;
-        }
-        .navbar {
-            background: white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-            padding: 1rem 2rem;
-        }
-        .stat-card {
-            background: white;
-            border-radius: 10px;
-            padding: 1.5rem;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 1.5rem;
-        }
-        .stat-card-icon {
-            width: 60px;
-            height: 60px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            color: white;
-        }
-    </style>
+    } else {
+        // Development: Ayrı dosyalar (debug için)
+        echo '<link href="' . base_url('application/views/admin/assets/design-tokens.css') . '" rel="stylesheet">';
+        echo '<link href="' . base_url('application/views/admin/assets/admin-theme.css') . '" rel="stylesheet">';
+        echo '<link href="' . base_url('application/views/admin/assets/modern-admin.css') . '" rel="stylesheet">';
+    }
+    ?>
+    <!-- Skip to main content for accessibility -->
+    <a href="#main-content" class="skip-link">Ana içeriğe geç</a>
 </head>
 <body>
-    <div class="sidebar">
+    <div class="sidebar" id="sidebar">
         <div class="sidebar-brand">
-            <i class="bi bi-box-seam"></i> GardıropPlus
+            <i class="bi bi-box-seam"></i> 
+            <span>GardıropPlus</span>
         </div>
         <ul class="sidebar-menu">
             <li>
@@ -168,16 +111,40 @@
         </ul>
     </div>
     
-    <div class="main-content">
+    <main id="main-content" class="main-content" role="main">
         <nav class="navbar">
             <div class="d-flex justify-content-between align-items-center w-100">
-                <h4 class="mb-0"><?php echo isset($title) ? $title : 'Admin Panel'; ?></h4>
                 <div class="d-flex align-items-center">
-                    <span class="me-3">Hoş geldiniz, <strong><?php echo isset($admin['first_name']) ? $admin['first_name'] : 'Admin'; ?></strong></span>
+                    <button class="btn btn-link d-md-none sidebar-toggle me-3" type="button">
+                        <i class="bi bi-list"></i>
+                    </button>
+                    <div>
+                        <h4 class="mb-0"><?php echo isset($title) ? $title : 'Admin Panel'; ?></h4>
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0">
+                                <li class="breadcrumb-item"><a href="<?php echo base_url('admin/dashboard'); ?>">Dashboard</a></li>
+                            </ol>
+                        </nav>
+                    </div>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <!-- Global Search -->
+                    <div class="global-search">
+                        <div class="input-group">
+                            <span class="input-group-text"><i class="bi bi-search"></i></span>
+                            <input type="text" class="form-control" placeholder="Ara... (Ctrl+K)" aria-label="Search">
+                        </div>
+                    </div>
+                    <span class="d-none d-md-inline">Hoş geldiniz, <strong><?php echo isset($admin['first_name']) ? $admin['first_name'] : 'Admin'; ?></strong></span>
                     <a href="<?php echo base_url('admin/logout'); ?>" class="btn btn-outline-danger btn-sm">
-                        <i class="bi bi-box-arrow-right"></i> Çıkış
+                        <i class="bi bi-box-arrow-right"></i> <span class="d-none d-md-inline">Çıkış</span>
                     </a>
                 </div>
             </div>
         </nav>
+        
+        <!-- Theme Toggle Button -->
+        <button class="theme-toggle" aria-label="Toggle theme">
+            <i class="bi bi-moon"></i>
+        </button>
 

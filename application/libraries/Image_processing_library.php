@@ -212,6 +212,84 @@ class Image_processing_library
     }
 
     /**
+     * Progressive JPEG oluştur (progressive loading için)
+     */
+    public function create_progressive_jpeg($source_path, $destination_path = null, $quality = 85)
+    {
+        if (!$destination_path) {
+            $destination_path = $source_path;
+        }
+
+        $image = $this->load_image($source_path, 'image/jpeg');
+        if (!$image) {
+            return ['success' => false, 'error' => 'Failed to load image'];
+        }
+
+        // Progressive JPEG için imageinterlace kullan
+        imageinterlace($image, 1);
+        $saved = imagejpeg($image, $destination_path, $quality);
+        imagedestroy($image);
+
+        if ($saved) {
+            return [
+                'success' => true,
+                'path' => $destination_path,
+                'progressive' => true
+            ];
+        }
+
+        return ['success' => false, 'error' => 'Failed to save progressive JPEG'];
+    }
+
+    /**
+     * Multiple thumbnail sizes oluştur
+     */
+    public function create_multiple_thumbnails($source_path, $base_path, $sizes = [])
+    {
+        if (empty($sizes)) {
+            $sizes = [
+                'small' => ['width' => 150, 'height' => 150],
+                'medium' => ['width' => 300, 'height' => 300],
+                'large' => ['width' => 600, 'height' => 600]
+            ];
+        }
+
+        $results = [];
+        $filename = pathinfo($source_path, PATHINFO_FILENAME);
+        $extension = pathinfo($source_path, PATHINFO_EXTENSION);
+
+        foreach ($sizes as $size_name => $dimensions) {
+            $thumb_path = $base_path . $size_name . '_' . $filename . '.' . $extension;
+            $result = $this->create_thumbnail(
+                $source_path,
+                $thumb_path,
+                $dimensions['width'],
+                $dimensions['height']
+            );
+            $results[$size_name] = $result;
+        }
+
+        return $results;
+    }
+
+    /**
+     * Responsive image srcset oluştur
+     */
+    public function generate_srcset($base_url, $sizes = [])
+    {
+        if (empty($sizes)) {
+            $sizes = [150, 300, 600, 900, 1200];
+        }
+
+        $srcset = [];
+        foreach ($sizes as $width) {
+            $srcset[] = $base_url . '?w=' . $width . ' ' . $width . 'w';
+        }
+
+        return implode(', ', $srcset);
+    }
+
+    /**
      * Resim bilgilerini al
      */
     public function get_image_info($path)

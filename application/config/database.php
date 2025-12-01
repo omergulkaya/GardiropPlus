@@ -166,5 +166,7 @@ $db['default'] = array(
     'compress' => false,
     'stricton' => false,
     'failover' => array(),
-    'save_queries' => true
+    'save_queries' => true, // Query logging için aktif
+    // Query Toolbar: Development ortamında yavaş sorguları görmek için
+    'query_toolbar' => (ENVIRONMENT !== 'production')
 );

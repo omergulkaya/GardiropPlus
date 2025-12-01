@@ -60,6 +60,10 @@ $config['compression_level'] = 4; // 1-9 (brotli için)
 $config['db_persistent'] = false; // CodeIgniter'da persistent connection
 $config['db_cache_on'] = false; // Query result caching
 
+// Query Cache Configuration
+$config['query_cache_enabled'] = $env ? ($env->get('QUERY_CACHE_ENABLED', 'true') === 'true') : true;
+$config['query_cache_ttl'] = $env ? (int)$env->get('QUERY_CACHE_TTL', 3600) : 3600;
+
 // API Optimization
 $config['enable_field_selection'] = true; // ?fields=name,email
 $config['enable_cursor_pagination'] = true; // Cursor-based pagination

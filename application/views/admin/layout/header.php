@@ -126,8 +126,13 @@
                 </a>
             </li>
             <li>
-                <a href="<?php echo base_url('admin/errors'); ?>" class="<?php echo (strpos(uri_string(), 'admin/error') !== false) ? 'active' : ''; ?>">
+                <a href="<?php echo base_url('admin/errors'); ?>" class="<?php echo (strpos(uri_string(), 'admin/error') !== false && strpos(uri_string(), 'admin/error_statistics') === false) ? 'active' : ''; ?>">
                     <i class="bi bi-bug"></i> API Hataları
+                </a>
+            </li>
+            <li>
+                <a href="<?php echo base_url('admin/error_statistics'); ?>" class="<?php echo (strpos(uri_string(), 'admin/error_statistics') !== false) ? 'active' : ''; ?>">
+                    <i class="bi bi-bar-chart"></i> Hata İstatistikleri
                 </a>
             </li>
             <li>

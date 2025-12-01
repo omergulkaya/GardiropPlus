@@ -47,3 +47,11 @@ $hook['pre_controller'] = array(
         'filepath' => 'hooks'
     )
 );
+
+// Response compression hook (API için)
+$hook['post_controller_constructor'] = array(
+    'class'    => 'Response_compression_hook',
+    'function' => 'compress_output',
+    'filename' => 'Response_compression_hook.php',
+    'filepath' => 'hooks'
+);

@@ -4,172 +4,370 @@ defined('BASEPATH') or exit('No direct script access allowed');
 
 /**
  * Cache Library
- * Response ve query caching için
+ * Redis/Memcached ve file-based caching desteği
  */
 class Cache_library
 {
-    private $ci;
-    private $default_ttl = 3600;
-// 1 saat
-    private $cache_enabled = true;
-
+    private $driver = 'file'; // file, redis, memcached
+    private $prefix = 'closet_';
+    private $default_ttl = 3600; // 1 saat
+    
     public function __construct()
     {
-        $this->ci =& get_instance();
-        $this->ci->load->driver('cache', ['adapter' => 'file', 'backup' => 'file']);
-// Cache enabled kontrolü
-        $this->cache_enabled = $this->ci->config->item('cache_enabled') !== false;
+        $CI =& get_instance();
+        $CI->load->library('env_library');
+        $env = $CI->env_library;
+        
+        // Cache driver'ı .env'den veya config'den al
+        $this->driver = $env->get('CACHE_DRIVER') ?: $CI->config->item('cache_driver') ?: 'file';
+        $this->prefix = $env->get('CACHE_PREFIX') ?: $CI->config->item('cache_prefix') ?: 'closet_';
+        $this->default_ttl = (int)($env->get('CACHE_DEFAULT_TTL') ?: $CI->config->item('cache_default_ttl') ?: 3600);
     }
 
     /**
      * Cache'den veri al
-     *
-     * @param string $key Cache key
-     * @return mixed|null
      */
     public function get($key)
     {
-        if (!$this->cache_enabled) {
-            return null;
+        $key = $this->prefix . $key;
+        
+        switch ($this->driver) {
+            case 'redis':
+                return $this->get_redis($key);
+            case 'memcached':
+                return $this->get_memcached($key);
+            case 'file':
+            default:
+                return $this->get_file($key);
         }
-
-        $cache_key = $this->get_cache_key($key);
-        return $this->ci->cache->get($cache_key);
     }
 
     /**
      * Cache'e veri kaydet
-     *
-     * @param string $key Cache key
-     * @param mixed $data Cache edilecek veri
-     * @param int $ttl Time to live (saniye)
-     * @return bool
      */
-    public function set($key, $data, $ttl = null)
+    public function set($key, $value, $ttl = null)
     {
-        if (!$this->cache_enabled) {
-            return false;
-        }
-
-        $cache_key = $this->get_cache_key($key);
+        $key = $this->prefix . $key;
         $ttl = $ttl ?: $this->default_ttl;
-        return $this->ci->cache->save($cache_key, $data, $ttl);
+        
+        switch ($this->driver) {
+            case 'redis':
+                return $this->set_redis($key, $value, $ttl);
+            case 'memcached':
+                return $this->set_memcached($key, $value, $ttl);
+            case 'file':
+            default:
+                return $this->set_file($key, $value, $ttl);
+        }
     }
 
     /**
      * Cache'den veri sil
-     *
-     * @param string $key Cache key
-     * @return bool
      */
     public function delete($key)
     {
-        $cache_key = $this->get_cache_key($key);
-        return $this->ci->cache->delete($cache_key);
+        $key = $this->prefix . $key;
+        
+        switch ($this->driver) {
+            case 'redis':
+                return $this->delete_redis($key);
+            case 'memcached':
+                return $this->delete_memcached($key);
+            case 'file':
+            default:
+                return $this->delete_file($key);
+        }
     }
 
     /**
-     * Pattern'e göre cache temizle
-     *
-     * @param string $pattern Pattern (örn: 'user_*')
-     * @return int Silinen kayıt sayısı
+     * Cache'i temizle (tüm prefix'li key'ler)
      */
-    public function delete_pattern($pattern)
+    public function clear($pattern = null)
     {
-        // File cache için pattern deletion
-        $cache_path = $this->ci->config->item('cache_path') ?: APPPATH . 'cache/';
-        $files = glob($cache_path . $pattern);
-        $deleted = 0;
-        foreach ($files as $file) {
-            if (is_file($file) && unlink($file)) {
-                $deleted++;
-            }
+        if ($pattern) {
+            $pattern = $this->prefix . $pattern;
         }
+        
+        switch ($this->driver) {
+            case 'redis':
+                return $this->clear_redis($pattern);
+            case 'memcached':
+                return $this->clear_memcached($pattern);
+            case 'file':
+            default:
+                return $this->clear_file($pattern);
+        }
+    }
 
-        return $deleted;
+    /**
+     * Cache'de var mı kontrol et
+     */
+    public function exists($key)
+    {
+        return $this->get($key) !== false;
     }
 
     /**
      * Response cache key oluştur
-     *
-     * @param string $uri URI
-     * @param array $params Query parametreleri
-     * @return string
      */
     public function get_response_key($uri, $params = [])
     {
-        $key = 'response_' . md5($uri . serialize($params));
+        $key = 'response_' . md5($uri . json_encode($params));
         return $key;
     }
 
     /**
-     * Query cache key oluştur
-     *
-     * @param string $query SQL query
-     * @param array $params Query parametreleri
-     * @return string
+     * File-based cache
      */
-    public function get_query_key($query, $params = [])
+    private function get_file($key)
     {
-        $key = 'query_' . md5($query . serialize($params));
-        return $key;
+        $file = $this->get_cache_file($key);
+        if (!file_exists($file)) {
+            return false;
+        }
+        
+        $data = unserialize(file_get_contents($file));
+        if ($data['expires'] < time()) {
+            unlink($file);
+            return false;
+        }
+        
+        return $data['value'];
     }
 
-    /**
-     * Cache key normalize et
-     *
-     * @param string $key
-     * @return string
-     */
-    private function get_cache_key($key)
+    private function set_file($key, $value, $ttl)
     {
-        // Key'i normalize et (özel karakterleri temizle)
-        return preg_replace('/[^a-zA-Z0-9_]/', '_', $key);
+        $file = $this->get_cache_file($key);
+        $dir = dirname($file);
+        
+        if (!is_dir($dir)) {
+            mkdir($dir, 0755, true);
+        }
+        
+        $data = [
+            'value' => $value,
+            'expires' => time() + $ttl
+        ];
+        
+        return file_put_contents($file, serialize($data)) !== false;
     }
 
-    /**
-     * Cache istatistikleri
-     *
-     * @return array
-     */
-    public function get_stats()
+    private function delete_file($key)
     {
-        $cache_path = $this->ci->config->item('cache_path') ?: APPPATH . 'cache/';
-        $files = glob($cache_path . '*');
-        $total_size = 0;
-        $file_count = 0;
+        $file = $this->get_cache_file($key);
+        if (file_exists($file)) {
+            return unlink($file);
+        }
+        return true;
+    }
+
+    private function clear_file($pattern = null)
+    {
+        $cache_dir = APPPATH . 'cache/data/';
+        if (!is_dir($cache_dir)) {
+            return true;
+        }
+        
+        $files = glob($cache_dir . ($pattern ?: $this->prefix) . '*');
         foreach ($files as $file) {
             if (is_file($file)) {
-                $total_size += filesize($file);
-                $file_count++;
+                unlink($file);
             }
         }
+        return true;
+    }
 
-        return [
-            'enabled' => $this->cache_enabled,
-            'file_count' => $file_count,
-            'total_size' => $total_size,
-            'total_size_mb' => round($total_size / 1024 / 1024, 2)
-        ];
+    private function get_cache_file($key)
+    {
+        $hash = md5($key);
+        $dir = APPPATH . 'cache/data/' . substr($hash, 0, 2) . '/';
+        return $dir . $hash . '.cache';
     }
 
     /**
-     * Cache'i temizle
-     *
-     * @return bool
+     * Redis cache
      */
-    public function clear()
+    private function get_redis($key)
     {
-        return $this->ci->cache->clean();
+        try {
+            $redis = $this->get_redis_connection();
+            if (!$redis) {
+                return false;
+            }
+            $value = $redis->get($key);
+            return $value !== false ? unserialize($value) : false;
+        } catch (Exception $e) {
+            log_message('error', 'Redis get error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function set_redis($key, $value, $ttl)
+    {
+        try {
+            $redis = $this->get_redis_connection();
+            if (!$redis) {
+                return false;
+            }
+            return $redis->setex($key, $ttl, serialize($value));
+        } catch (Exception $e) {
+            log_message('error', 'Redis set error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function delete_redis($key)
+    {
+        try {
+            $redis = $this->get_redis_connection();
+            if (!$redis) {
+                return false;
+            }
+            return $redis->del($key) > 0;
+        } catch (Exception $e) {
+            log_message('error', 'Redis delete error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function clear_redis($pattern = null)
+    {
+        try {
+            $redis = $this->get_redis_connection();
+            if (!$redis) {
+                return false;
+            }
+            $pattern = $pattern ?: $this->prefix . '*';
+            $keys = $redis->keys($pattern);
+            if (!empty($keys)) {
+                return $redis->del($keys) > 0;
+            }
+            return true;
+        } catch (Exception $e) {
+            log_message('error', 'Redis clear error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function get_redis_connection()
+    {
+        static $redis = null;
+        
+        if ($redis !== null) {
+            return $redis;
+        }
+        
+        if (!extension_loaded('redis')) {
+            return false;
+        }
+        
+        $CI =& get_instance();
+        $CI->load->library('env_library');
+        $env = $CI->env_library;
+        
+        $host = $env->get('REDIS_HOST') ?: $CI->config->item('redis_host') ?: '127.0.0.1';
+        $port = (int)($env->get('REDIS_PORT') ?: $CI->config->item('redis_port') ?: 6379);
+        $password = $env->get('REDIS_PASSWORD') ?: $CI->config->item('redis_password') ?: null;
+        
+        try {
+            $redis = new Redis();
+            $redis->connect($host, $port);
+            if ($password) {
+                $redis->auth($password);
+            }
+            return $redis;
+        } catch (Exception $e) {
+            log_message('error', 'Redis connection error: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /**
-     * Cache warming - önemli endpoint'leri önceden cache'le
+     * Memcached cache
      */
-    public function warm_up()
+    private function get_memcached($key)
     {
-        // Örnek: Sık kullanılan endpoint'leri cache'le
-        // Bu metod özelleştirilebilir
-        log_message('info', 'Cache warming started');
+        try {
+            $memcached = $this->get_memcached_connection();
+            if (!$memcached) {
+                return false;
+            }
+            $value = $memcached->get($key);
+            return $value !== false ? $value : false;
+        } catch (Exception $e) {
+            log_message('error', 'Memcached get error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function set_memcached($key, $value, $ttl)
+    {
+        try {
+            $memcached = $this->get_memcached_connection();
+            if (!$memcached) {
+                return false;
+            }
+            return $memcached->set($key, $value, $ttl);
+        } catch (Exception $e) {
+            log_message('error', 'Memcached set error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function delete_memcached($key)
+    {
+        try {
+            $memcached = $this->get_memcached_connection();
+            if (!$memcached) {
+                return false;
+            }
+            return $memcached->delete($key);
+        } catch (Exception $e) {
+            log_message('error', 'Memcached delete error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function clear_memcached($pattern = null)
+    {
+        try {
+            $memcached = $this->get_memcached_connection();
+            if (!$memcached) {
+                return false;
+            }
+            return $memcached->flush();
+        } catch (Exception $e) {
+            log_message('error', 'Memcached clear error: ' . $e->getMessage());
+            return false;
+        }
+    }
+
+    private function get_memcached_connection()
+    {
+        static $memcached = null;
+        
+        if ($memcached !== null) {
+            return $memcached;
+        }
+        
+        if (!extension_loaded('memcached')) {
+            return false;
+        }
+        
+        $CI =& get_instance();
+        $CI->load->library('env_library');
+        $env = $CI->env_library;
+        
+        $host = $env->get('MEMCACHED_HOST') ?: $CI->config->item('memcached_host') ?: '127.0.0.1';
+        $port = (int)($env->get('MEMCACHED_PORT') ?: $CI->config->item('memcached_port') ?: 11211);
+        
+        try {
+            $memcached = new Memcached();
+            $memcached->addServer($host, $port);
+            return $memcached;
+        } catch (Exception $e) {
+            log_message('error', 'Memcached connection error: ' . $e->getMessage());
+            return false;
+        }
     }
 }

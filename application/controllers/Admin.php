@@ -28,7 +28,9 @@ class Admin extends CI_Controller
         $this->load->model('User_privacy_model');
         $this->load->model('Data_retention_model');
         $this->load->model('Anonymous_analytics_model');
+        $this->load->model('Error_statistics_model');
         $this->load->library('advanced_filter_library');
+        $this->load->library('cache_library');
         
         // Admin authentication kontrolü
         $this->check_admin_auth();
@@ -336,6 +338,55 @@ class Admin extends CI_Controller
         
         $this->load->view('admin/layout/header', $data);
         $this->load->view('admin/statistics', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * Hata İstatistikleri
+     */
+    public function error_statistics()
+    {
+        $data['title'] = 'Hata İstatistikleri - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+        
+        $period = $this->input->get('period') ?: 'daily';
+        $days = (int)($this->input->get('days') ?: 30);
+        $date_from = $this->input->get('date_from') ?: date('Y-m-d', strtotime("-{$days} days"));
+        $date_to = $this->input->get('date_to') ?: date('Y-m-d');
+        
+        // Cache key
+        $cache_key = 'error_stats_' . md5($period . $days . $date_from . $date_to);
+        
+        // Cache'den oku veya hesapla
+        $stats = $this->cache_library->get($cache_key);
+        if ($stats === false) {
+            // Hata trend grafiği
+            $stats['trend'] = $this->Error_statistics_model->get_error_trend($period, $days);
+            
+            // Hata tipi dağılımı
+            $stats['type_distribution'] = $this->Error_statistics_model->get_error_type_distribution($date_from, $date_to);
+            
+            // En çok hata veren endpoint'ler
+            $stats['top_endpoints'] = $this->Error_statistics_model->get_top_error_endpoints(10, $date_from, $date_to);
+            
+            // Hata çözülme süreleri
+            $stats['resolution_times'] = $this->Error_statistics_model->get_resolution_times($date_from, $date_to);
+            
+            // Özet istatistikler
+            $stats['summary'] = $this->Error_statistics_model->get_statistics_summary($days);
+            
+            // Cache'e kaydet (5 dakika)
+            $this->cache_library->set($cache_key, $stats, 300);
+        }
+        
+        $data['stats'] = $stats;
+        $data['period'] = $period;
+        $data['days'] = $days;
+        $data['date_from'] = $date_from;
+        $data['date_to'] = $date_to;
+        
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/errors/statistics', $data);
         $this->load->view('admin/layout/footer', $data);
     }
 

@@ -135,6 +135,7 @@ class Error_handler_library
      */
     private function log_error($status_code, $error_code, $message, $errors = null, $details = null)
     {
+        // File logger (mevcut)
         if (isset($this->logger)) {
             $context = [
                 'error_code' => $error_code,
@@ -147,6 +148,137 @@ class Error_handler_library
                 $this->logger->error($message, $context);
             } else {
                 $this->logger->warning($message, $context);
+            }
+        }
+
+        // Database logger (yeni - API hatalarını veritabanına kaydet)
+        $this->log_error_to_database($status_code, $error_code, $message, $errors, $details);
+    }
+
+    /**
+     * Error'ı veritabanına kaydet
+     */
+    private function log_error_to_database($status_code, $error_code, $message, $errors = null, $details = null)
+    {
+        try {
+            // CodeIgniter instance kontrolü
+            if (!function_exists('get_instance')) {
+                return;
+            }
+
+            $CI =& get_instance();
+            
+            // Database bağlantısı kontrolü
+            if (!isset($CI->db) || !$CI->db->conn_id) {
+                return;
+            }
+
+            // Api_error_model yükle
+            $CI->load->model('Api_error_model');
+
+            // Request bilgileri
+            $endpoint = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : null;
+            $method = isset($_SERVER['REQUEST_METHOD']) ? $_SERVER['REQUEST_METHOD'] : null;
+            
+            // User ID (eğer varsa)
+            $user_id = null;
+            if ($CI->session && $CI->session->userdata('user_id')) {
+                $user_id = $CI->session->userdata('user_id');
+            } elseif (isset($CI->jwt) && method_exists($CI->jwt, 'get_user_id')) {
+                // JWT'den user ID al
+                try {
+                    $user_id = $CI->jwt->get_user_id();
+                } catch (Exception $e) {
+                    // JWT yoksa devam et
+                }
+            }
+
+            // Severity belirleme
+            $severity = 'medium';
+            if ($status_code >= 500) {
+                $severity = 'critical';
+            } elseif ($status_code >= 400 && $status_code < 500) {
+                $severity = 'high';
+            }
+
+            // Request body (sadece POST/PUT/PATCH)
+            $request_body = null;
+            if (in_array($method, ['POST', 'PUT', 'PATCH'])) {
+                $input = file_get_contents('php://input');
+                if ($input) {
+                    $request_body = json_decode($input, true);
+                    if ($request_body) {
+                        $request_body = json_encode($request_body, JSON_UNESCAPED_UNICODE);
+                    } else {
+                        $request_body = $input;
+                    }
+                }
+            }
+
+            // Request headers
+            $request_headers = null;
+            if (function_exists('getallheaders')) {
+                $headers = getallheaders();
+                if ($headers) {
+                    // Hassas bilgileri temizle
+                    $safe_headers = [];
+                    foreach ($headers as $key => $value) {
+                        if (strtolower($key) === 'authorization') {
+                            $safe_headers[$key] = substr($value, 0, 20) . '...';
+                        } else {
+                            $safe_headers[$key] = $value;
+                        }
+                    }
+                    $request_headers = json_encode($safe_headers, JSON_UNESCAPED_UNICODE);
+                }
+            }
+
+            // Stack trace
+            $stack_trace = null;
+            if ($details && isset($details['trace'])) {
+                $stack_trace = $details['trace'];
+            } elseif (ENVIRONMENT === 'development') {
+                $stack_trace = (new Exception())->getTraceAsString();
+            }
+
+            // Error data
+            $error_data = [
+                'error_code' => $error_code,
+                'status_code' => $status_code,
+                'message' => substr($message, 0, 1000), // Mesaj uzunluğu sınırı
+                'endpoint' => $endpoint,
+                'method' => $method,
+                'user_id' => $user_id,
+                'ip_address' => $CI->input->ip_address(),
+                'user_agent' => $CI->input->user_agent(),
+                'request_body' => $request_body ? substr($request_body, 0, 5000) : null, // Body uzunluğu sınırı
+                'request_headers' => $request_headers,
+                'stack_trace' => $stack_trace ? substr($stack_trace, 0, 10000) : null, // Stack trace uzunluğu sınırı
+                'severity' => $severity,
+                'status' => 'new'
+            ];
+
+            // Exception bilgileri
+            if ($details) {
+                if (isset($details['exception'])) {
+                    $error_data['exception_type'] = $details['exception'];
+                }
+                if (isset($details['file'])) {
+                    $error_data['file'] = $details['file'];
+                }
+                if (isset($details['line'])) {
+                    $error_data['line'] = $details['line'];
+                }
+            }
+
+            // Veritabanına kaydet
+            $CI->Api_error_model->create($error_data);
+
+        } catch (Exception $e) {
+            // Veritabanı loglama hatası olursa sessizce devam et
+            // File logger zaten çalışıyor
+            if (ENVIRONMENT === 'development') {
+                log_message('error', 'Error database logging failed: ' . $e->getMessage());
             }
         }
     }

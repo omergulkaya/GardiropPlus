@@ -121,6 +121,16 @@
                 </a>
             </li>
             <li>
+                <a href="<?php echo base_url('admin/errors'); ?>" class="<?php echo (strpos(uri_string(), 'admin/error') !== false) ? 'active' : ''; ?>">
+                    <i class="bi bi-bug"></i> API Hataları
+                </a>
+            </li>
+            <li>
+                <a href="<?php echo base_url('admin/activity_logs'); ?>" class="<?php echo (strpos(uri_string(), 'admin/activity_logs') !== false) ? 'active' : ''; ?>">
+                    <i class="bi bi-clock-history"></i> Aktivite Logları
+                </a>
+            </li>
+            <li>
                 <a href="<?php echo base_url('admin/settings'); ?>" class="<?php echo (uri_string() == 'admin/settings') ? 'active' : ''; ?>">
                     <i class="bi bi-gear"></i> Ayarlar
                 </a>

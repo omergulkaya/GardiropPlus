@@ -20,6 +20,10 @@ class Admin extends CI_Controller
         $this->load->model('Clothing_item_model');
         $this->load->model('Outfit_model');
         $this->load->model('Analytics_model');
+        $this->load->model('Api_error_model');
+        $this->load->model('Admin_activity_log_model');
+        $this->load->model('Gdpr_model');
+        $this->load->model('Role_model');
         
         // Admin authentication kontrolü
         $this->check_admin_auth();
@@ -284,6 +288,143 @@ class Admin extends CI_Controller
         
         $this->load->view('admin/layout/header', $data);
         $this->load->view('admin/settings', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * API Hataları listesi
+     */
+    public function errors()
+    {
+        $data['title'] = 'API Hataları - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+
+        // Filtreler
+        $filters = [
+            'status_code' => $this->input->get('status_code'),
+            'error_code' => $this->input->get('error_code'),
+            'endpoint' => $this->input->get('endpoint'),
+            'status' => $this->input->get('status'),
+            'severity' => $this->input->get('severity'),
+            'date_from' => $this->input->get('date_from'),
+            'date_to' => $this->input->get('date_to'),
+            'search' => $this->input->get('search'),
+            'order_by' => $this->input->get('order_by') ?: 'last_occurred_at',
+            'order_dir' => $this->input->get('order_dir') ?: 'DESC'
+        ];
+
+        // Pagination
+        $page = $this->input->get('page') ?: 1;
+        $per_page = 50;
+        $offset = ($page - 1) * $per_page;
+
+        $data['errors'] = $this->Api_error_model->get_filtered($filters, $per_page, $offset);
+        $data['total_errors'] = $this->Api_error_model->count_filtered($filters);
+        $data['current_page'] = $page;
+        $data['per_page'] = $per_page;
+        $data['total_pages'] = ceil($data['total_errors'] / $per_page);
+        $data['filters'] = $filters;
+
+        // İstatistikler
+        $data['stats'] = [
+            'total' => $this->Api_error_model->count_filtered([]),
+            'last_24h' => $this->Api_error_model->count_last_24h(),
+            'critical' => $this->Api_error_model->count_filtered(['severity' => 'critical', 'status' => 'new'])
+        ];
+
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/errors/index', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * Hata detay
+     */
+    public function error_detail($id)
+    {
+        $data['title'] = 'Hata Detayı - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+        $data['error'] = $this->Api_error_model->get_by_id($id);
+
+        if (!$data['error']) {
+            show_404();
+        }
+
+        // Request body ve headers JSON'dan parse et
+        if ($data['error']['request_body']) {
+            $data['error']['request_body_parsed'] = json_decode($data['error']['request_body'], true);
+        }
+        if ($data['error']['request_headers']) {
+            $data['error']['request_headers_parsed'] = json_decode($data['error']['request_headers'], true);
+        }
+
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/errors/detail', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * Hata durumu güncelle
+     */
+    public function update_error_status()
+    {
+        if (!$this->input->is_ajax_request()) {
+            show_404();
+        }
+
+        $id = $this->input->post('id');
+        $status = $this->input->post('status');
+        $notes = $this->input->post('notes');
+
+        if (!$id || !$status) {
+            $this->output->set_status_header(400);
+            $this->output->set_output(json_encode(['success' => false, 'message' => 'Eksik parametreler']));
+            return;
+        }
+
+        $result = $this->Api_error_model->update_status($id, $status, $this->admin_id, $notes);
+
+        if ($result) {
+            $this->output->set_output(json_encode(['success' => true, 'message' => 'Hata durumu güncellendi']));
+        } else {
+            $this->output->set_status_header(500);
+            $this->output->set_output(json_encode(['success' => false, 'message' => 'Güncelleme başarısız']));
+        }
+    }
+
+    /**
+     * Admin aktivite logları
+     */
+    public function activity_logs()
+    {
+        $data['title'] = 'Aktivite Logları - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+
+        // Filtreler
+        $filters = [
+            'admin_id' => $this->input->get('admin_id'),
+            'action' => $this->input->get('action'),
+            'resource_type' => $this->input->get('resource_type'),
+            'is_suspicious' => $this->input->get('is_suspicious'),
+            'date_from' => $this->input->get('date_from'),
+            'date_to' => $this->input->get('date_to'),
+            'search' => $this->input->get('search')
+        ];
+
+        // Pagination
+        $page = $this->input->get('page') ?: 1;
+        $per_page = 50;
+        $offset = ($page - 1) * $per_page;
+
+        $data['logs'] = $this->Admin_activity_log_model->get_filtered($filters, $per_page, $offset);
+        $data['total_logs'] = $this->Admin_activity_log_model->count_filtered($filters);
+        $data['current_page'] = $page;
+        $data['per_page'] = $per_page;
+        $data['total_pages'] = ceil($data['total_logs'] / $per_page);
+        $data['filters'] = $filters;
+
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/activity_logs/index', $data);
         $this->load->view('admin/layout/footer', $data);
     }
 }

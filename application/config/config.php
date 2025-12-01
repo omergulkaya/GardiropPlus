@@ -24,7 +24,56 @@ defined('BASEPATH') or exit('No direct script access allowed');
 | a PHP script and you can easily do that on your own.
 |
 */
-$config['base_url'] = 'https://gardiropplus.igyazilim.com/';
+// Base URL'i .env dosyasından oku
+$base_url = 'https://gardiropplus.igyazilim.com/'; // Fallback değer
+
+// .env dosyasını oku - birden fazla olası konumu kontrol et
+$env_files = array(
+    FCPATH . '.env',           // Proje root
+    APPPATH . '../.env',       // Bir üst dizin
+    __DIR__ . '/../../.env',   // Relative path
+);
+
+$env_file = null;
+foreach ($env_files as $file) {
+    if (file_exists($file) && is_readable($file)) {
+        $env_file = $file;
+        break;
+    }
+}
+
+if ($env_file) {
+    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+    foreach ($lines as $line) {
+        // Yorum satırlarını atla
+        $line = trim($line);
+        if (empty($line) || strpos($line, '#') === 0) {
+            continue;
+        }
+        
+        // KEY=VALUE formatını parse et
+        if (strpos($line, '=') !== false) {
+            list($key, $value) = explode('=', $line, 2);
+            $key = trim($key);
+            $value = trim($value);
+            
+            // Tırnak işaretlerini kaldır
+            $value = trim($value, '"\'');
+            
+            // BASE_URL değişkenini kontrol et
+            if ($key === 'BASE_URL' || $key === 'APP_URL') {
+                $base_url = $value;
+                // Trailing slash kontrolü
+                if (substr($base_url, -1) !== '/') {
+                    $base_url .= '/';
+                }
+                break;
+            }
+        }
+    }
+}
+
+$config['base_url'] = $base_url;
 
 /*
 |--------------------------------------------------------------------------

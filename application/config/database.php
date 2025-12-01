@@ -74,11 +74,11 @@ defined('BASEPATH') or exit('No direct script access allowed');
 $active_group = 'default';
 $query_builder = true;
 
-// .env dosyasından veritabanı bilgilerini yükle
-$db_hostname = 'localhost';
-$db_username = 'root';
-$db_password = '';
-$db_database = 'closet_db';
+// .env dosyasından veritabanı bilgilerini yükle - SADECE .env dosyasından okunur
+$db_hostname = null;
+$db_username = null;
+$db_password = null;
+$db_database = null;
 
 // .env dosyasını oku - birden fazla olası konumu kontrol et
 $env_files = array(
@@ -95,52 +95,57 @@ foreach ($env_files as $file) {
     }
 }
 
-if ($env_file) {
-    $lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
-    foreach ($lines as $line) {
-        // Yorum satırlarını atla
-        $line = trim($line);
-        if (empty($line) || strpos($line, '#') === 0) {
-            continue;
-        }
+if (!$env_file) {
+    // .env dosyası bulunamadı - hata ver
+    header('HTTP/1.1 500 Internal Server Error');
+    die('Database configuration error: .env file not found. Please create .env file in the project root directory.');
+}
+
+// .env dosyasını oku
+$lines = file($env_file, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES);
+foreach ($lines as $line) {
+    // Yorum satırlarını atla
+    $line = trim($line);
+    if (empty($line) || strpos($line, '#') === 0) {
+        continue;
+    }
+    
+    // KEY=VALUE formatını parse et
+    if (strpos($line, '=') !== false) {
+        list($key, $value) = explode('=', $line, 2);
+        $key = trim($key);
+        $value = trim($value);
         
-        // KEY=VALUE formatını parse et
-        if (strpos($line, '=') !== false) {
-            list($key, $value) = explode('=', $line, 2);
-            $key = trim($key);
-            $value = trim($value);
-            
-            // Tırnak işaretlerini kaldır
-            $value = trim($value, '"\'');
-            
-            // Veritabanı değişkenlerini set et
-            switch ($key) {
-                case 'DB_HOST':
-                case 'DB_HOSTNAME':
-                    $db_hostname = $value;
-                    break;
-                case 'DB_USER':
-                case 'DB_USERNAME':
-                    $db_username = $value;
-                    break;
-                case 'DB_PASS':
-                case 'DB_PASSWORD':
-                    $db_password = $value;
-                    break;
-                case 'DB_NAME':
-                case 'DB_DATABASE':
-                    $db_database = $value;
-                    break;
-            }
+        // Tırnak işaretlerini kaldır
+        $value = trim($value, '"\'');
+        
+        // Veritabanı değişkenlerini set et
+        switch ($key) {
+            case 'DB_HOST':
+            case 'DB_HOSTNAME':
+                $db_hostname = $value;
+                break;
+            case 'DB_USER':
+            case 'DB_USERNAME':
+                $db_username = $value;
+                break;
+            case 'DB_PASS':
+            case 'DB_PASSWORD':
+                $db_password = $value;
+                break;
+            case 'DB_NAME':
+            case 'DB_DATABASE':
+                $db_database = $value;
+                break;
         }
     }
 }
 
-// Environment variable'lardan da yükle (öncelikli)
-$db_hostname = getenv('DB_HOST') ?: getenv('DB_HOSTNAME') ?: $db_hostname;
-$db_username = getenv('DB_USER') ?: getenv('DB_USERNAME') ?: $db_username;
-$db_password = getenv('DB_PASS') ?: getenv('DB_PASSWORD') ?: $db_password;
-$db_database = getenv('DB_NAME') ?: getenv('DB_DATABASE') ?: $db_database;
+// .env dosyasından okunan değerleri kontrol et
+if (empty($db_hostname) || empty($db_username) || empty($db_database)) {
+    header('HTTP/1.1 500 Internal Server Error');
+    die('Database configuration error: Required database settings (DB_HOST, DB_USERNAME, DB_DATABASE) are missing in .env file.');
+}
 
 $db['default'] = array(
     'dsn'   => '',

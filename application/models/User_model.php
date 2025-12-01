@@ -178,12 +178,23 @@ class User_model extends CI_Model
     }
 
     /**
-     * Aktif kullanıcıları say (son 30 gün içinde giriş yapan)
+     * Aktif kullanıcıları say
+     * Not: last_login kolonu yoksa, email_verified olan kullanıcıları aktif sayar
      */
     public function count_active_users()
     {
-        $this->db->where('last_login >=', date('Y-m-d H:i:s', strtotime('-30 days')));
-        return $this->db->count_all_results($this->table);
+        // last_login kolonu varsa onu kullan, yoksa email_verified kullan
+        $columns = $this->db->list_fields($this->table);
+        
+        if (in_array('last_login', $columns)) {
+            // last_login kolonu varsa son 30 gün içinde giriş yapanları say
+            $this->db->where('last_login >=', date('Y-m-d H:i:s', strtotime('-30 days')));
+            return $this->db->count_all_results($this->table);
+        } else {
+            // last_login yoksa email_verified olan kullanıcıları aktif say
+            $this->db->where('email_verified', 1);
+            return $this->db->count_all_results($this->table);
+        }
     }
 
     /**

@@ -40,6 +40,22 @@ class Admin extends CI_Controller
             
             $this->admin_id = $this->session->userdata('admin_id');
             $this->admin_data = $this->User_model->get_by_id($this->admin_id);
+            
+            // Admin yetkisi kontrolü (double check)
+            if ($this->admin_data) {
+                $is_admin = false;
+                if (isset($this->admin_data['role']) && $this->admin_data['role'] === 'admin') {
+                    $is_admin = true;
+                } elseif (isset($this->admin_data['is_admin']) && ($this->admin_data['is_admin'] == 1 || $this->admin_data['is_admin'] === true)) {
+                    $is_admin = true;
+                }
+                
+                if (!$is_admin) {
+                    $this->session->unset_userdata(['admin_logged_in', 'admin_id', 'admin_email', 'admin_name']);
+                    $this->session->set_flashdata('error', 'Admin yetkiniz kaldırıldı. Lütfen sistem yöneticisi ile iletişime geçin.');
+                    redirect('admin/login');
+                }
+            }
         }
     }
 
@@ -76,10 +92,27 @@ class Admin extends CI_Controller
             redirect('admin/login');
         }
 
-        // Admin kontrolü (email'e göre veya role field'ı varsa)
-        // Şimdilik tüm kullanıcılar admin olabilir, production'da role kontrolü eklenmeli
+        // Şifre kontrolü
         if (!password_verify($password, $user['password'])) {
             $this->session->set_flashdata('error', 'Geçersiz email veya şifre.');
+            redirect('admin/login');
+        }
+
+        // Admin kontrolü - role veya is_admin field'ı kontrol et
+        $is_admin = false;
+        
+        // Önce role field'ını kontrol et
+        if (isset($user['role']) && $user['role'] === 'admin') {
+            $is_admin = true;
+        }
+        // Eğer role yoksa is_admin field'ını kontrol et
+        elseif (isset($user['is_admin']) && ($user['is_admin'] == 1 || $user['is_admin'] === true)) {
+            $is_admin = true;
+        }
+        
+        // Admin değilse erişim reddedilir
+        if (!$is_admin) {
+            $this->session->set_flashdata('error', 'Bu sayfaya erişim yetkiniz yok. Sadece admin kullanıcılar giriş yapabilir.');
             redirect('admin/login');
         }
 

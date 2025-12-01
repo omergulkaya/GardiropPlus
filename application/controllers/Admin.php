@@ -823,55 +823,89 @@ class Admin extends CI_Controller
     }
 
     /**
-     * 2FA email gönder
+     * 2FA email gönder (PHPMailer kullanarak)
      */
     private function send_2fa_email($email, $code)
     {
-        $this->load->library('email');
-        
-        $config = [
-            'protocol' => 'smtp',
-            'smtp_host' => $this->config->item('smtp_host') ?: 'localhost',
-            'smtp_port' => $this->config->item('smtp_port') ?: 587,
-            'smtp_user' => $this->config->item('smtp_user') ?: '',
-            'smtp_pass' => $this->config->item('smtp_pass') ?: '',
-            'smtp_crypto' => $this->config->item('smtp_crypto') ?: 'tls',
-            'mailtype' => 'html',
-            'charset' => 'utf-8',
-            'wordwrap' => true
-        ];
-        
-        $this->email->initialize($config);
-        
-        $this->email->from($this->config->item('smtp_user') ?: 'noreply@gardiropplus.com', 'GardıropPlus Admin');
-        $this->email->to($email);
-        $this->email->subject('2FA Doğrulama Kodu - GardıropPlus Admin');
-        
-        $message = '
-        <html>
-        <head>
-            <style>
-                body { font-family: Arial, sans-serif; }
-                .container { max-width: 600px; margin: 0 auto; padding: 20px; }
-                .code-box { background: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 5px; }
-                .warning { color: #d9534f; font-size: 14px; margin-top: 20px; }
-            </style>
-        </head>
-        <body>
-            <div class="container">
-                <h2>2FA Doğrulama Kodu</h2>
-                <p>Admin paneline giriş için doğrulama kodunuz:</p>
-                <div class="code-box">' . $code . '</div>
-                <p>Bu kod 10 dakika geçerlidir.</p>
-                <p class="warning">Bu kodu kimseyle paylaşmayın. Eğer bu işlemi siz yapmadıysanız, lütfen hemen sistem yöneticisi ile iletişime geçin.</p>
-                <p>İyi günler,<br>GardıropPlus Admin Ekibi</p>
-            </div>
-        </body>
-        </html>';
-        
-        $this->email->message($message);
-        
-        return $this->email->send();
+        try {
+            // .env dosyasını yükle (eğer yüklenmemişse)
+            if (!getenv('SMTP_HOST')) {
+                $this->load->library('env_library');
+            }
+            
+            // PHPMailer library'sini yükle
+            $this->load->library('phpmailer_lib');
+            $mail = $this->phpmailer_lib->load();
+            
+            // .env dosyasından SMTP ayarlarını oku
+            $smtp_host = getenv('SMTP_HOST') ?: $_ENV['SMTP_HOST'] ?? 'srv.igartista.com';
+            $smtp_port = (int)(getenv('SMTP_PORT') ?: $_ENV['SMTP_PORT'] ?? 465);
+            $smtp_username = getenv('SMTP_USERNAME') ?: $_ENV['SMTP_USERNAME'] ?? 'ig@simurgwebtasarim.com';
+            $smtp_password = getenv('SMTP_PASSWORD') ?: $_ENV['SMTP_PASSWORD'] ?? '';
+            $smtp_encryption = getenv('SMTP_ENCRYPTION') ?: $_ENV['SMTP_ENCRYPTION'] ?? 'ssl';
+            
+            // PHPMailer ayarları
+            $mail->isSMTP();
+            $mail->Host = $smtp_host;
+            $mail->SMTPAuth = true;
+            $mail->Username = $smtp_username;
+            $mail->Password = $smtp_password;
+            $mail->SMTPSecure = $smtp_encryption; // 'ssl' veya 'tls'
+            $mail->Port = $smtp_port;
+            $mail->CharSet = 'UTF-8';
+            
+            // SSL sertifika doğrulamasını atla (sertifika adı eşleşmese bile çalışsın)
+            $mail->SMTPOptions = [
+                'ssl' => [
+                    'verify_peer' => false,
+                    'verify_peer_name' => false,
+                    'allow_self_signed' => true
+                ]
+            ];
+            
+            // Email içeriği
+            $mail->setFrom($smtp_username, 'GardıropPlus Admin');
+            $mail->addAddress($email);
+            $mail->isHTML(true);
+            $mail->Subject = '2FA Doğrulama Kodu - GardıropPlus Admin';
+            
+            $message = '
+            <html>
+            <head>
+                <style>
+                    body { font-family: Arial, sans-serif; }
+                    .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+                    .code-box { background: #f4f4f4; padding: 20px; text-align: center; font-size: 32px; font-weight: bold; letter-spacing: 5px; margin: 20px 0; border-radius: 5px; }
+                    .warning { color: #d9534f; font-size: 14px; margin-top: 20px; }
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>2FA Doğrulama Kodu</h2>
+                    <p>Admin paneline giriş için doğrulama kodunuz:</p>
+                    <div class="code-box">' . htmlspecialchars($code) . '</div>
+                    <p>Bu kod 10 dakika geçerlidir.</p>
+                    <p class="warning">Bu kodu kimseyle paylaşmayın. Eğer bu işlemi siz yapmadıysanız, lütfen hemen sistem yöneticisi ile iletişime geçin.</p>
+                    <p>İyi günler,<br>GardıropPlus Admin Ekibi</p>
+                </div>
+            </body>
+            </html>';
+            
+            $mail->Body = $message;
+            $mail->AltBody = '2FA Doğrulama Kodu: ' . $code . ' (10 dakika geçerlidir)';
+            
+            // Email gönder
+            $result = $mail->send();
+            
+            if (!$result) {
+                log_message('error', '2FA Email gönderme hatası: ' . $mail->ErrorInfo);
+            }
+            
+            return $result;
+        } catch (Exception $e) {
+            log_message('error', '2FA Email gönderme hatası: ' . $e->getMessage());
+            return false;
+        }
     }
 }
 

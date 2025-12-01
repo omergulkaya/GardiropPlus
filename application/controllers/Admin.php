@@ -850,9 +850,20 @@ class Admin extends CI_Controller
             $mail->SMTPAuth = true;
             $mail->Username = $smtp_username;
             $mail->Password = $smtp_password;
-            $mail->SMTPSecure = $smtp_encryption; // 'ssl' veya 'tls'
+            
+            // Port 465 için SSL, 587 için TLS
+            if ($smtp_port == 465) {
+                $mail->SMTPSecure = 'ssl'; // Port 465 için SSL
+            } elseif ($smtp_encryption == 'tls') {
+                $mail->SMTPSecure = 'tls'; // Port 587 için TLS
+            } else {
+                $mail->SMTPSecure = $smtp_encryption; // 'ssl' veya 'tls'
+            }
+            
             $mail->Port = $smtp_port;
             $mail->CharSet = 'UTF-8';
+            $mail->Timeout = 30; // Timeout süresini artır (saniye)
+            $mail->SMTPKeepAlive = false; // Her email için yeni bağlantı
             
             // SSL sertifika doğrulamasını atla (sertifika adı eşleşmese bile çalışsın)
             $mail->SMTPOptions = [
@@ -862,6 +873,14 @@ class Admin extends CI_Controller
                     'allow_self_signed' => true
                 ]
             ];
+            
+            // Debug modu (development için - production'da kapatılmalı)
+            if (ENVIRONMENT === 'development') {
+                $mail->SMTPDebug = 2; // 0 = off, 1 = client, 2 = client and server
+                $mail->Debugoutput = function($str, $level) {
+                    log_message('debug', 'PHPMailer: ' . $str);
+                };
+            }
             
             // Email içeriği
             $mail->setFrom($smtp_username, 'GardıropPlus Admin');

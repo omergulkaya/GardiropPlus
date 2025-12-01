@@ -1,0 +1,21 @@
+parameters:
+    level: 5
+    paths:
+        - application/controllers
+        - application/models
+        - application/libraries
+    excludePaths:
+        - application/third_party/*
+        - application/system/*
+    ignoreErrors:
+        # CodeIgniter specific patterns
+        - '#Call to an undefined method CI_Loader::(.*)#'
+        - '#Access to an undefined property CI_Controller::(.*)#'
+        - '#Call to an undefined method CI_Controller::(.*)#'
+        - '#Access to an undefined property CI_Model::(.*)#'
+        - '#Call to an undefined method CI_Model::(.*)#'
+        - '#Access to an undefined property CI_DB_query_builder::(.*)#'
+        - '#Call to an undefined method CI_DB_query_builder::(.*)#'
+    checkMissingIterableValueType: false
+    checkGenericClassInNonGenericObjectType: false
+

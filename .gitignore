@@ -1,0 +1,79 @@
+# OS Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*~
+
+# Environment & Config
+.env
+.env.local
+.env.*.local
+# Config dosyaları yüklenebilir (örnek olarak), production'da dikkatli olun
+# application/config/database.php
+# application/config/config.php
+
+# CodeIgniter
+application/cache/*
+!application/cache/index.html
+application/logs/*
+!application/logs/index.html
+!application/*/.htaccess
+
+# Composer
+/vendor/
+composer.lock
+
+# Uploads & User Data
+uploads/*
+!uploads/.gitkeep
+!uploads/images/.gitkeep
+!uploads/profiles/.gitkeep
+
+# Database
+# *.sql - SQL dosyaları yüklenebilir (örnek veritabanı şemaları)
+*.sqlite
+*.db
+tests/mocks/database/ci_test.sqlite
+# Sadece test database'lerini ignore et
+*_test.sql
+*_test.db
+
+# IDE Files
+/nbproject/
+.idea/
+.vscode/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+
+# Cache Files
+*.tmlanguage.cache
+*.tmPreferences.cache
+*.stTheme.cache
+.phpunit.result.cache
+
+# Build & Dist
+*.zip
+*.tar.gz
+*.rar
+web-api.zip
+
+# Tests
+/tests/tests/
+/tests/results/
+/tests/coverage/
+
+# Documentation Build
+user_guide_src/build/*
+user_guide_src/cilexer/build/*
+user_guide_src/cilexer/dist/*
+user_guide_src/cilexer/pycilexer.egg-info/*
+
+# Documentation and Database Files (moved to docs/)
+/docs/

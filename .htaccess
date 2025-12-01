@@ -1,0 +1,65 @@
+#<IfModule mod_expires.c>
+#	ExpiresActive On
+#	ExpiresByType image/jpg "access 1 year"
+#	ExpiresByType image/jpeg "access 1 year"
+#	ExpiresByType image/gif "access 1 year"
+#	ExpiresByType image/png "access 1 year"
+#	ExpiresByType text/css "access 1 month"
+#	ExpiresByType application/pdf "access 1 month"
+#	ExpiresByType text/x-javascript "access 1 month"
+#	ExpiresByType application/x-shockwave-flash "access 1 month"
+#	ExpiresByType image/x-icon "access 1 year"
+#	ExpiresDefault "access 2 days"
+#</IfModule>
+
+<IfModule mod_security.c>
+	SecFilterEngine Off
+	SecFilterScanPOST Off
+</IfModule>
+
+RewriteEngine on
+#RewriteCond %{HTTP_HOST} ^www\.(.*)$ [NC]
+#RewriteRule ^(.*)$ http://%1/$1 [R=301,L]
+
+# Authorization header'ını koru (Apache mod_rewrite için)
+RewriteCond %{HTTP:Authorization} ^(.*)
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%1]
+
+RewriteCond $1 !^(index\.php|public|\.txt)
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^(.*)$ index.php?$1
+
+<IfModule php5_module>
+#	php_flag asp_tags Off
+#	php_flag display_errors Off
+	php_value max_execution_time 500
+	php_value max_input_time 60
+	php_value max_input_vars 1000
+	php_value memory_limit 256M
+	php_value post_max_size 30M
+	php_value session.gc_maxlifetime 1440
+#	php_value session.save_path "/var/cpanel/php/sessions/ea-php56"
+	php_value upload_max_filesize 30M
+#	php_flag zlib.output_compression On
+</IfModule>
+
+# Gzip Compression
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/plain text/xml text/css text/javascript application/javascript application/json
+    AddOutputFilterByType DEFLATE image/svg+xml
+</IfModule>
+
+# Browser Caching
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/jpg "access plus 1 year"
+    ExpiresByType image/jpeg "access plus 1 year"
+    ExpiresByType image/gif "access plus 1 year"
+    ExpiresByType image/png "access plus 1 year"
+    ExpiresByType image/webp "access plus 1 year"
+    ExpiresByType text/css "access plus 1 month"
+    ExpiresByType application/javascript "access plus 1 month"
+    ExpiresByType application/json "access plus 0 seconds"
+    ExpiresDefault "access plus 2 days"
+</IfModule>

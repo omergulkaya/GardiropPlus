@@ -24,6 +24,9 @@ class Admin extends CI_Controller
         $this->load->model('Admin_activity_log_model');
         $this->load->model('Gdpr_model');
         $this->load->model('Role_model');
+        $this->load->model('User_2fa_model');
+        $this->load->model('User_privacy_model');
+        $this->load->model('Data_retention_model');
         
         // Admin authentication kontrolü
         $this->check_admin_auth();
@@ -120,6 +123,17 @@ class Admin extends CI_Controller
             redirect('admin/login');
         }
 
+        // 2FA kontrolü
+        if ($this->User_2fa_model->is_enabled($user['id'])) {
+            // 2FA kodu girilmesi gerekiyor
+            $this->session->set_userdata([
+                'admin_pending_2fa' => true,
+                'admin_pending_user_id' => $user['id'],
+                'admin_pending_email' => $user['email']
+            ]);
+            redirect('admin/verify_2fa');
+        }
+
         // Admin session oluştur
         $this->session->set_userdata([
             'admin_logged_in' => true,
@@ -177,11 +191,27 @@ class Admin extends CI_Controller
         $per_page = 20;
         $offset = ($page - 1) * $per_page;
         
-        $data['users'] = $this->User_model->get_all_paginated($per_page, $offset);
+        $users = $this->User_model->get_all_paginated($per_page, $offset);
+        
+        // Veri minimizasyonu ve gizlilik kontrolü
+        $this->load->helper('privacy');
+        foreach ($users as &$user) {
+            // Admin görüntüleme izni kontrolü
+            if (!$this->User_privacy_model->can_admin_view($user['id'])) {
+                $user['hidden'] = true;
+            }
+            // Hassas verileri temizle
+            $user = sanitize_for_display($user);
+        }
+        
+        $data['users'] = $users;
         $data['total_users'] = $this->User_model->count_all();
         $data['current_page'] = $page;
         $data['per_page'] = $per_page;
         $data['total_pages'] = ceil($data['total_users'] / $per_page);
+        
+        // Admin aktivite logu
+        log_admin_activity('view_users_list', 'user', null, ['page' => $page]);
         
         $this->load->view('admin/layout/header', $data);
         $this->load->view('admin/users/index', $data);
@@ -195,15 +225,36 @@ class Admin extends CI_Controller
     {
         $data['title'] = 'Kullanıcı Detayı - GardıropPlus Admin';
         $data['admin'] = $this->admin_data;
+        
+        // Gizlilik kontrolü
+        if (!$this->User_privacy_model->can_admin_view($id)) {
+            $this->session->set_flashdata('error', 'Bu kullanıcı admin tarafından görüntülenmeyi engellemiş.');
+            redirect('admin/users');
+        }
+        
+        // Veri erişim logu kaydet
+        $this->load->helper('privacy');
+        log_data_access($id, $this->admin_id, 'view', 'user', ['fields' => ['profile']], 'Admin paneli kullanıcı görüntüleme', 'legal_obligation');
+        
         $data['user'] = $this->User_model->get_by_id($id);
         
         if (!$data['user']) {
             show_404();
         }
         
+        // Veri minimizasyonu uygula
+        $this->load->helper('privacy');
+        $data['user'] = sanitize_for_display($data['user']);
+        
+        // Gizlilik ayarları
+        $data['privacy_settings'] = $this->User_privacy_model->get_or_create($id);
+        
         // Kullanıcının kıyafetleri
         $data['user_clothing'] = $this->Clothing_item_model->get_all($id, []);
         $data['user_outfits'] = $this->Outfit_model->get_all($id, []);
+        
+        // Admin aktivite logu
+        log_admin_activity('view_user', 'user', $id, ['fields' => ['profile']]);
         
         $this->load->view('admin/layout/header', $data);
         $this->load->view('admin/users/detail', $data);
@@ -444,6 +495,199 @@ class Admin extends CI_Controller
 
         $this->load->view('admin/layout/header', $data);
         $this->load->view('admin/activity_logs/index', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * 2FA doğrulama sayfası
+     */
+    public function verify_2fa()
+    {
+        if (!$this->session->userdata('admin_pending_2fa')) {
+            redirect('admin/login');
+        }
+
+        $data['title'] = '2FA Doğrulama - GardıropPlus Admin';
+        $data['user_id'] = $this->session->userdata('admin_pending_user_id');
+        $data['email'] = $this->session->userdata('admin_pending_email');
+
+        if ($this->input->post('code')) {
+            $code = $this->input->post('code');
+            $user_id = $this->session->userdata('admin_pending_user_id');
+            
+            $user = $this->User_model->get_by_id($user_id);
+            $twofa = $this->User_2fa_model->get_or_create($user_id);
+            
+            $verified = false;
+            
+            if ($twofa['method'] === 'totp') {
+                $verified = $this->User_2fa_model->verify_totp_code($user_id, $code);
+                
+                // TOTP başarısızsa yedek kod dene
+                if (!$verified) {
+                    $verified = $this->User_2fa_model->verify_backup_code($user_id, $code);
+                }
+            } elseif ($twofa['method'] === 'email') {
+                $verified = $this->User_2fa_model->verify_email_code($user_id, $code);
+            }
+            
+            if ($verified) {
+                // 2FA doğrulandı, session oluştur
+                $this->session->unset_userdata(['admin_pending_2fa', 'admin_pending_user_id', 'admin_pending_email']);
+                $this->session->set_userdata([
+                    'admin_logged_in' => true,
+                    'admin_id' => $user['id'],
+                    'admin_email' => $user['email'],
+                    'admin_name' => $user['first_name'] . ' ' . $user['last_name']
+                ]);
+                
+                redirect('admin/dashboard');
+            } else {
+                $data['error'] = 'Geçersiz doğrulama kodu.';
+            }
+        }
+
+        $this->load->view('admin/verify_2fa', $data);
+    }
+
+    /**
+     * 2FA ayarları
+     */
+    public function twofa_settings()
+    {
+        $data['title'] = '2FA Ayarları - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+        
+        $user_id = $this->admin_id;
+        $twofa = $this->User_2fa_model->get_or_create($user_id);
+        $data['twofa'] = $twofa;
+
+        if ($this->input->post('action')) {
+            $action = $this->input->post('action');
+            
+            if ($action === 'enable_totp') {
+                // TOTP secret oluştur
+                $secret = $this->User_2fa_model->generate_totp_secret();
+                $this->User_2fa_model->save_totp_secret($user_id, $secret);
+                
+                // Yedek kodlar oluştur
+                $backup_codes = $this->User_2fa_model->generate_backup_codes($user_id);
+                
+                $this->load->library('google_authenticator');
+                $ga = $this->google_authenticator;
+                
+                $data['secret'] = $secret;
+                $data['backup_codes'] = $backup_codes;
+                $data['qr_url'] = $ga->getQRCodeUrl(
+                    $this->admin_data['email'],
+                    $secret,
+                    'GardıropPlus Admin'
+                );
+                $data['show_setup'] = true;
+            } elseif ($action === 'verify_totp') {
+                $code = $this->input->post('code');
+                if ($this->User_2fa_model->verify_totp_code($user_id, $code)) {
+                    $this->User_2fa_model->enable($user_id, 'totp');
+                    $this->session->set_flashdata('success', '2FA başarıyla etkinleştirildi.');
+                    redirect('admin/twofa_settings');
+                } else {
+                    $data['error'] = 'Geçersiz doğrulama kodu.';
+                }
+            } elseif ($action === 'disable') {
+                $this->User_2fa_model->disable($user_id);
+                $this->session->set_flashdata('success', '2FA devre dışı bırakıldı.');
+                redirect('admin/twofa_settings');
+            } elseif ($action === 'send_email_code') {
+                $code = $this->User_2fa_model->create_email_code($user_id);
+                // Email gönder (PHPMailer kullanılabilir)
+                $this->load->library('phpmailer_lib');
+                // Email gönderme kodu buraya eklenecek
+                $data['email_code_sent'] = true;
+            }
+        }
+
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/twofa_settings', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * Veri saklama politikaları
+     */
+    public function data_retention()
+    {
+        $data['title'] = 'Veri Saklama Politikaları - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+        
+        $data['policies'] = $this->Data_retention_model->get_all_policies();
+        $data['cleanup_logs'] = $this->Data_retention_model->get_cleanup_logs(null, 20);
+
+        if ($this->input->post('update_policy')) {
+            $data_type = $this->input->post('data_type');
+            $retention_days = (int)$this->input->post('retention_days');
+            $auto_delete = $this->input->post('auto_delete') ? 1 : 0;
+            
+            $this->Data_retention_model->update_policy($data_type, $retention_days, $auto_delete);
+            $this->session->set_flashdata('success', 'Politika güncellendi.');
+            redirect('admin/data_retention');
+        }
+
+        if ($this->input->post('run_cleanup')) {
+            $data_type = $this->input->post('data_type');
+            $result = $this->Data_retention_model->cleanup_data($data_type);
+            
+            if ($result['success']) {
+                $this->session->set_flashdata('success', $result['records_deleted'] . ' kayıt silindi.');
+            } else {
+                $this->session->set_flashdata('error', 'Temizleme başarısız: ' . $result['message']);
+            }
+            redirect('admin/data_retention');
+        }
+
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/data_retention', $data);
+        $this->load->view('admin/layout/footer', $data);
+    }
+
+    /**
+     * Gizlilik ayarları (kullanıcılar için)
+     */
+    public function privacy_settings()
+    {
+        $data['title'] = 'Gizlilik Ayarları - GardıropPlus Admin';
+        $data['admin'] = $this->admin_data;
+        
+        // Tüm silme taleplerini getir
+        $data['deletion_requests'] = $this->User_privacy_model->get_deletion_requests('pending');
+
+        if ($this->input->post('process_deletion')) {
+            $user_id = $this->input->post('user_id');
+            $action = $this->input->post('action'); // approve, reject
+            
+            if ($action === 'approve') {
+                $this->load->model('Data_retention_model');
+                $this->Data_retention_model->secure_delete_user_data($user_id);
+                $this->session->set_flashdata('success', 'Kullanıcı verileri güvenli şekilde silindi.');
+            } elseif ($action === 'reject') {
+                $reason = $this->input->post('rejection_reason');
+                $this->load->model('Gdpr_model');
+                $request = $this->Gdpr_model->get_user_deletion_request($user_id);
+                if ($request) {
+                    $this->Gdpr_model->process_deletion_request(
+                        $request['id'],
+                        'rejected',
+                        $this->admin_id,
+                        null,
+                        $reason
+                    );
+                }
+                $this->session->set_flashdata('success', 'Silme talebi reddedildi.');
+            }
+            redirect('admin/privacy_settings');
+        }
+
+        $this->load->view('admin/layout/header', $data);
+        $this->load->view('admin/privacy_settings', $data);
         $this->load->view('admin/layout/footer', $data);
     }
 }

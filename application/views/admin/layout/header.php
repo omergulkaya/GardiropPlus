@@ -131,6 +131,21 @@
                 </a>
             </li>
             <li>
+                <a href="<?php echo base_url('admin/twofa_settings'); ?>" class="<?php echo (strpos(uri_string(), 'admin/twofa') !== false) ? 'active' : ''; ?>">
+                    <i class="bi bi-shield-lock"></i> 2FA Ayarları
+                </a>
+            </li>
+            <li>
+                <a href="<?php echo base_url('admin/data_retention'); ?>" class="<?php echo (strpos(uri_string(), 'admin/data_retention') !== false) ? 'active' : ''; ?>">
+                    <i class="bi bi-database-check"></i> Veri Saklama
+                </a>
+            </li>
+            <li>
+                <a href="<?php echo base_url('admin/privacy_settings'); ?>" class="<?php echo (strpos(uri_string(), 'admin/privacy_settings') !== false) ? 'active' : ''; ?>">
+                    <i class="bi bi-eye-slash"></i> Gizlilik Ayarları
+                </a>
+            </li>
+            <li>
                 <a href="<?php echo base_url('admin/settings'); ?>" class="<?php echo (uri_string() == 'admin/settings') ? 'active' : ''; ?>">
                     <i class="bi bi-gear"></i> Ayarlar
                 </a>

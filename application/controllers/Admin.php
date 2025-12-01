@@ -679,6 +679,14 @@ class Admin extends CI_Controller
         $user_id = $this->admin_id;
         $twofa = $this->User_2fa_model->get_or_create($user_id);
         $data['twofa'] = $twofa;
+        
+        // .env dosyasından SMTP bilgilerini oku (test için)
+        $this->load->library('env_library');
+        $env = $this->env_library;
+        $data['smtp_host'] = $env->get('SMTP_HOST', 'BULUNAMADI');
+        $data['smtp_port'] = $env->get('SMTP_PORT', 'BULUNAMADI');
+        $data['smtp_username'] = $env->get('SMTP_USERNAME', 'BULUNAMADI');
+        $data['smtp_encryption'] = $env->get('SMTP_ENCRYPTION', 'BULUNAMADI');
 
         if ($this->input->post('action')) {
             $action = $this->input->post('action');
@@ -828,21 +836,25 @@ class Admin extends CI_Controller
     private function send_2fa_email($email, $code)
     {
         try {
-            // .env dosyasını yükle (eğer yüklenmemişse)
-            if (!getenv('SMTP_HOST')) {
-                $this->load->library('env_library');
-            }
+            // .env dosyasını yükle
+            $this->load->library('env_library');
+            $env = $this->env_library;
             
             // PHPMailer library'sini yükle
             $this->load->library('phpmailer_lib');
             $mail = $this->phpmailer_lib->load();
             
-            // .env dosyasından SMTP ayarlarını oku
-            $smtp_host = getenv('SMTP_HOST') ?: $_ENV['SMTP_HOST'] ?? 'srv.igartista.com';
-            $smtp_port = (int)(getenv('SMTP_PORT') ?: $_ENV['SMTP_PORT'] ?? 465);
-            $smtp_username = getenv('SMTP_USERNAME') ?: $_ENV['SMTP_USERNAME'] ?? 'ig@simurgwebtasarim.com';
-            $smtp_password = getenv('SMTP_PASSWORD') ?: $_ENV['SMTP_PASSWORD'] ?? '';
-            $smtp_encryption = getenv('SMTP_ENCRYPTION') ?: $_ENV['SMTP_ENCRYPTION'] ?? 'ssl';
+            // .env dosyasından SMTP ayarlarını oku (Env_library kullanarak)
+            $smtp_host = $env->get('SMTP_HOST', 'srv.igartista.com');
+            $smtp_port = (int)$env->get('SMTP_PORT', 465);
+            $smtp_username = $env->get('SMTP_USERNAME', 'ig@simurgwebtasarim.com');
+            $smtp_password = $env->get('SMTP_PASSWORD', '');
+            $smtp_encryption = $env->get('SMTP_ENCRYPTION', 'ssl');
+            
+            // Debug: Okunan değerleri logla (şifre hariç)
+            if (ENVIRONMENT === 'development') {
+                log_message('debug', 'SMTP Ayarları: Host=' . $smtp_host . ', Port=' . $smtp_port . ', User=' . $smtp_username . ', Encryption=' . $smtp_encryption);
+            }
             
             // PHPMailer ayarları
             $mail->isSMTP();

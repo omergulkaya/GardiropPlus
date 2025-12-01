@@ -6,6 +6,25 @@ $show_setup = isset($show_setup) ? $show_setup : false;
 <div class="stat-card">
     <h5 class="mb-3"><i class="bi bi-shield-lock"></i> İki Faktörlü Doğrulama (2FA) Ayarları</h5>
     
+    <!-- SMTP Bilgileri (Test için) -->
+    <div class="alert alert-info mb-3">
+        <h6><i class="bi bi-info-circle"></i> SMTP Ayarları (.env dosyasından)</h6>
+        <div class="row">
+            <div class="col-md-6">
+                <strong>SMTP Host:</strong> <code><?php echo htmlspecialchars($smtp_host ?? 'BULUNAMADI'); ?></code>
+            </div>
+            <div class="col-md-6">
+                <strong>SMTP Port:</strong> <code><?php echo htmlspecialchars($smtp_port ?? 'BULUNAMADI'); ?></code>
+            </div>
+            <div class="col-md-6 mt-2">
+                <strong>SMTP Username:</strong> <code><?php echo htmlspecialchars($smtp_username ?? 'BULUNAMADI'); ?></code>
+            </div>
+            <div class="col-md-6 mt-2">
+                <strong>SMTP Encryption:</strong> <code><?php echo htmlspecialchars($smtp_encryption ?? 'BULUNAMADI'); ?></code>
+            </div>
+        </div>
+    </div>
+    
     <?php if (isset($error)): ?>
         <div class="alert alert-danger">
             <i class="bi bi-exclamation-triangle"></i> <?php echo htmlspecialchars($error); ?>

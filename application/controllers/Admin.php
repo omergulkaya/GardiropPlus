@@ -185,7 +185,7 @@ class Admin extends CI_Controller
         $per_page = 30;
         $offset = ($page - 1) * $per_page;
         
-        $data['clothing'] = $this->Clothing_item_model->get_all_paginated($per_page, $offset);
+        $data['clothing'] = $this->Clothing_item_model->get_all_admin_paginated($per_page, $offset);
         $data['total_clothing'] = $this->Clothing_item_model->count_all();
         $data['current_page'] = $page;
         $data['per_page'] = $per_page;

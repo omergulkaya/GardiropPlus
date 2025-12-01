@@ -674,7 +674,7 @@ class Clothing_item_model extends CI_Model
     /**
      * Pagination ile tüm kıyafetleri getir (admin için)
      */
-    public function get_all_paginated($per_page = 30, $offset = 0)
+    public function get_all_admin_paginated($per_page = 30, $offset = 0)
     {
         $this->db->order_by('date_added', 'DESC');
         $this->db->limit($per_page, $offset);
